@@ -1,4 +1,4 @@
-require('whatwg-fetch');
+require('isomorphic-fetch');
 var child_process = require('child_process');
 var shellescape = require('shell-escape');
 var fs = require('fs');
@@ -12,7 +12,7 @@ fetch('http://169.254.169.254/latest/meta-data/instance-id').then(function(respo
   return execPromise(
     'aws ec2 describe-tags ' +
     '--filters "Name=resource-type,Values=instance" ' +
-    `"NAME=resource-id,Values=${instanceName}"`
+    `"Name=resource-id,Values=${instanceName}"`
   );
 }).then(function(tagsObj){
   info = {
@@ -22,7 +22,7 @@ fetch('http://169.254.169.254/latest/meta-data/instance-id').then(function(respo
     MasterURL : void 0
   };
   var keys = Object.keys(info);
-  tagsObj.Tags.forEach(function(tag){
+  JSON.parse(tagsObj).Tags.forEach(function(tag){
     if(keys.indexOf(tag.Key) > -1){
       info[ tag.Key ] = tag.Value;
     }
@@ -55,6 +55,8 @@ fetch('http://169.254.169.254/latest/meta-data/instance-id').then(function(respo
       { NODE_ENV : info.NODE_ENV || 'development' }
     )
   });
+}).catch(function(err){
+  console.error(err);
 });
 
 execPromise = function(string, options){
