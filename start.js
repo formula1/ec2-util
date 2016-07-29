@@ -3,7 +3,7 @@ var child_process = require('child_process');
 var shellescape = require('shell-escape');
 var fs = require('fs');
 
-var execPromise;
+var execPromise, removeIfExists;
 
 var info;
 fetch('http://169.254.169.254/latest/meta-data/instance-id').then(function(response){
@@ -30,15 +30,22 @@ fetch('http://169.254.169.254/latest/meta-data/instance-id').then(function(respo
   if(!info.GitRepo) throw new Error('No git repo to clone from');
   return info.GitRepo;
 }).then(function(repo){
-  return execPromise(
-    'git ' + shellescape('clone', repo, './application')
-  );
-}).then(function(){
+  return removeIfExists(__dirname + '/application').then(function(){
+    return child_process.execSync(
+      'git ' + shellescape(['clone', repo, './application'])
+    );
+  });
+}).then(function(stdout){
+  console.log('cloned : ', stdout);
   return execPromise(
     'npm install',
-    { cwd : __dirname + '/application' }
+    { 
+      cwd : __dirname + '/application',
+      uid : process.uid,
+    }
   );
-}).then(function(){
+}).then(function(stdout){
+  console.log('install : ', stdout);
   child_process.spawn('sudo', [ '-s', '--', '\'npm start\'' ], {
     detached : true,
     cwd : __dirname + '/application',
@@ -58,6 +65,20 @@ fetch('http://169.254.169.254/latest/meta-data/instance-id').then(function(respo
 }).catch(function(err){
   console.error(err);
 });
+
+var fs = require('fs');
+var rimraf = require('rimraf');
+removeIfExists = function(pathname){
+  return new Promise(function(res, rej){
+    fs.exists(pathname, function(boo){
+      if(!boo) return res();
+      rimraf(pathname, function(err){
+        if(err) return rej(err)
+        res();
+      })
+    });
+  });
+};
 
 execPromise = function(string, options){
   return new Promise(function(res, rej){

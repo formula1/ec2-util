@@ -10,6 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "isomorphic-fetch": "^2.2.1",
+    "rimraf": "^2.5.4",
     "shell-escape": "^0.2.0",
     "whatwg-fetch": "^1.0.0"
   }
