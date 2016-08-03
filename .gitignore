@@ -1,3 +1,5 @@
 /node_modules
 /application
+secret.*
+hidden
 *.log
