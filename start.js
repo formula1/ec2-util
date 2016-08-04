@@ -2,18 +2,34 @@ require('isomorphic-fetch');
 var child_process = require('child_process');
 var shellescape = require('shell-escape');
 var fs = require('fs');
+var path = require('path');
+var AWS = require('aws-sdk');
 
-var execPromise, removeIfExists;
+var secret = require('./secret.json');
+AWS.config.update(secret);
+var ec2 = new AWS.EC2();
+
+var __application = process.env.APP_PATH ||
+  path.resolve(__dirname, '../application');
+
+var execPromise, fileExists, removeIfExists;
 
 var info;
 fetch('http://169.254.169.254/latest/meta-data/instance-id').then(function(response){
   return response.text();
 }).then(function(instanceName){
-  return execPromise(
-    'aws ec2 describe-tags ' +
-    '--filters "Name=resource-type,Values=instance" ' +
-    `"Name=resource-id,Values=${instanceName}"`
-  );
+  return new Promise(function(res, rej){
+    ec2.describeTags({
+      Filters : [
+        { Name : 'resource-type', Values : [ 'instance' ] },
+        { Name : 'resource-id', Values : [ instanceName ] }
+      ]
+
+    }, function(err, data){
+      if(err) return rej(err);
+      res(data);
+    })
+  });
 }).then(function(tagsObj){
   info = {
     GitRepo : void 0,
@@ -22,7 +38,7 @@ fetch('http://169.254.169.254/latest/meta-data/instance-id').then(function(respo
     MasterURL : void 0
   };
   var keys = Object.keys(info);
-  JSON.parse(tagsObj).Tags.forEach(function(tag){
+  tagsObj.Tags.forEach(function(tag){
     if(keys.indexOf(tag.Key) > -1){
       info[ tag.Key ] = tag.Value;
     }
@@ -30,30 +46,30 @@ fetch('http://169.254.169.254/latest/meta-data/instance-id').then(function(respo
   if(!info.GitRepo) throw new Error('No git repo to clone from');
   return info.GitRepo;
 }).then(function(repo){
-  return removeIfExists(__dirname + '/application').then(function(){
+  return fileExists(__application + '/package.json').then(function(boo){
+    if(!boo){
+      return child_process.execSync(
+        'sudo -u ubuntu  git ' + shellescape(['clone', repo, __application])
+      );
+    }
     return child_process.execSync(
-      'git ' + shellescape(['clone', repo, './application'])
-    );
+      'sudo -u ubuntu git pull', { cwd : __application }
+    )
   });
 }).then(function(stdout){
-  console.log('cloned : ', stdout);
-  return execPromise(
+  console.log('repo : ', stdout.toString());
+  return child_process.execSync(
     'npm install',
     { 
-      cwd : __dirname + '/application',
-      uid : process.uid,
+      cwd : __application
     }
   );
 }).then(function(stdout){
-  console.log('install : ', stdout);
-  child_process.spawn('sudo', [ '-s', '--', '\'npm start\'' ], {
-    detached : true,
-    cwd : __dirname + '/application',
-    stdio : [
-      fs.createReadStream(__dirname + '/stdio'),
-      fs.createWriteStream(__dirname + '/stdout.log'),
-      fs.createWriteStream(__dirname + '/stderr.log')
-    ],
+  console.log('install : ', stdout.toString());
+  var child = child_process.spawn('npm', [ 'start' ], {
+    cwd : __application,
+    stdio : [ 'ignore', 'pipe', 'pipe' ],
+    gid : process.gid,
     uid : process.uid,
     env : Object.assign(
       {},
@@ -62,20 +78,31 @@ fetch('http://169.254.169.254/latest/meta-data/instance-id').then(function(respo
       { NODE_ENV : info.NODE_ENV || 'development' }
     )
   });
+
+  child.stdout.pipe(process.stdout);
+  child.stderr.pipe(process.stderr);
+
 }).catch(function(err){
   console.error(err);
 });
 
 var fs = require('fs');
 var rimraf = require('rimraf');
+
+fileExists = function(pathname){
+  return new Promise(function(res){
+    fs.exists(pathname, res);
+  });
+};
+
 removeIfExists = function(pathname){
-  return new Promise(function(res, rej){
-    fs.exists(pathname, function(boo){
-      if(!boo) return res();
+  return fileExists(pathname).then(function(boo){
+    if(!boo) return;
+    return new Promise(function(res, rej){
       rimraf(pathname, function(err){
         if(err) return rej(err)
         res();
-      })
+      });
     });
   });
 };

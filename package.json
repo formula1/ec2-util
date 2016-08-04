@@ -9,6 +9,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "aws-sdk": "^2.4.12",
     "isomorphic-fetch": "^2.2.1",
     "rimraf": "^2.5.4",
     "shell-escape": "^0.2.0",
