@@ -5,8 +5,7 @@ module.exports = function(args){
   var { secret, required } = args;
   AWS.config.update(secret.awsConfig);
   var ec2 = new AWS.EC2();
-  var info;
-  fetch('http://169.254.169.254/latest/meta-data/instance-id')
+  return fetch('http://169.254.169.254/latest/meta-data/instance-id')
   .then(function(response){
     return response.text();
   }).then(function(instanceName){

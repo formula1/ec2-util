@@ -13,22 +13,22 @@ if(!module.parent){
 
 module.exports = function(args){
   var [ stackType, __secret ] = args;
-
+  var secretInfo = require(__secret);
   Promise.resolve().then(function(){
-    return require(`./environments/${stackType}`)({ secret : require(__secret), required : requiredKeys});
+    return require(`./environments/${stackType}`)({ secret : secretInfo, required : requiredKeys});
   }).then(function(retInfo){
-    info = retInfo;
-    if(!info.home_directory) info.home_directory = process.env.HOME;
-    if(!info.ssh_file) info.ssh_file = path.join(info.home_directory, './.ssh/id_rsa');
-    else info.ssh_file = path.resolve(info.home_directory, info.ssh_file);
-    if(!info.username) info.username = process.env.LOGNAME;
-    if(!info.application_directory){
-      info.application_directory = process.env.APP_PATH || path.resolve(info.home_directory, './application');
-    }else{
-      info.application_directory = path.resolve(info.home_directory, info.application_directory);
-    }
-    if(!info.NODE_ENV) info.NODE_ENV = 'development';
-    if(!info.env_vars) info.env_vars = {};
+    var defaultInfo = {};
+    defaultInfo.username = process.env.LOGNAME;
+    defaultInfo.home_directory = process.env.HOME;
+    defaultInfo.ssh_file = './.ssh/id_rsa';
+    defaultInfo.application_directory = process.env.APP_PATH || './application';
+    defaultInfo.NODE_ENV = 'development';
+    defaultInfo.env_vars = {};
+    info = Object.assign({}, defaultInfo, secretInfo, retInfo);
+    if(!info.home_directory) info.home_directory = path.join('/home/', info.username);
+    info.ssh_file = path.resolve(info.home_directory, info.ssh_file);
+    info.application_directory = path.resolve(info.home_directory, info.application_directory);
+    console.log(info);
   }).then(function(){
     return require('./ssh-update')(info)
   }).then(function(){
@@ -38,13 +38,13 @@ module.exports = function(args){
     return child_process.execSync(
       'npm install',
       { 
-        cwd : __application
+        cwd : info.application_directory
       }
     );
   }).then(function(stdout){
     console.log('install : ', stdout.toString());
     var child = child_process.spawn('npm', [ 'start' ], {
-      cwd : __application,
+      cwd : info.application_directory,
       stdio : [ 'ignore', 'pipe', 'pipe' ],
       gid : process.gid,
       uid : process.uid,
@@ -58,7 +58,7 @@ module.exports = function(args){
     child.stdout.pipe(process.stdout);
     child.stderr.pipe(process.stderr);
   }).catch(function(err){
-    console.error(err);
+    console.error(err.stack);
   });
 };
 

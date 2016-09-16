@@ -15,9 +15,9 @@ module.exports = function(config){
       throw new Error('ssh folder does not exist');
     }
     
-    var configfile = path.join(__ssh, './.config');
+    var configFile = path.join(__ssh, './.config');
     var contents = `IdentityFile ${config.ssh_file}`;
-    if(fs.existsSync(configfile)){
+    if(fs.existsSync(configFile)){
       if(fs.readFileSync(configFile).toString() !== contents){
         throw new Error('config file already exists');
       }
